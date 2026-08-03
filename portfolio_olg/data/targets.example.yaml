@@ -1,0 +1,5 @@
+# Example calibration targets (fill in later; not estimated)
+moments:
+  wealth_gini: None
+  top10_wealth_share: None
+  mean_risky_share: None

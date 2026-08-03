@@ -1,0 +1,5 @@
+# Example calibration targets (fill in later; not estimated)
+moments:
+  homeownership_rate: None
+  mean_ltv: None
+  median_liquid: None

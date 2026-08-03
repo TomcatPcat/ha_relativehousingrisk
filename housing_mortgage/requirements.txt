@@ -1,0 +1,8 @@
+EconModel>=0.6
+ConSav>=0.6
+numpy>=1.22
+scipy>=1.9
+numba>=0.56
+matplotlib>=3.5
+pandas>=1.4
+jupyter>=1.0

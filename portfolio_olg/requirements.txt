@@ -1,0 +1,7 @@
+# econ-ark 0.14.x supports Python 3.9; 0.15+ may need newer Python
+econ-ark>=0.14.1,<0.15
+numpy>=1.22
+scipy>=1.9
+matplotlib>=3.5
+pandas>=1.4
+jupyter>=1.0

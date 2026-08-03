@@ -1,0 +1,17 @@
+name: hamodel
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.9,<3.13
+  - numpy
+  - scipy
+  - matplotlib
+  - pandas
+  - numba
+  - jupyter
+  - pip
+  - pip:
+      - econ-ark==0.14.1
+      - EconModel
+      - ConSav
