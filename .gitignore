@@ -16,6 +16,8 @@ venv/
 # Data / outputs (keep placeholders)
 **/data/*
 !**/data/.gitkeep
+!**/data/README.md
+!**/data/*.example.yaml
 **/output/*
 !**/output/.gitkeep
 **/figs/*

@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from .survey.weighted import wmean, wquantile
+
 # Major quantiles for lifecycle distribution plots / tables
 DEFAULT_QUANTILES: tuple[float, ...] = (0.10, 0.25, 0.50, 0.75, 0.90)
 
@@ -44,6 +46,7 @@ def age_profile(
     x: np.ndarray,
     ages: Optional[np.ndarray] = None,
     quantiles: Sequence[float] = DEFAULT_QUANTILES,
+    weights: Optional[np.ndarray] = None,
 ) -> pd.DataFrame:
     """
     Mean and quantiles by chronological age from a (T, N) simulated path.
@@ -55,6 +58,8 @@ def age_profile(
     ages :
         Chronological ages of length T (e.g. ``model.ages``). If omitted,
         uses period indices ``0,...,T-1``.
+    weights :
+        Optional length-N agent weights (or (T, N)). Default equal weights.
 
     Returns
     -------
@@ -64,25 +69,41 @@ def age_profile(
     arr = np.asarray(x, dtype=float)
     if arr.ndim != 2:
         raise ValueError(f"expected (T, N) array, got shape {arr.shape}")
-    T = arr.shape[0]
+    T, N = arr.shape
     if ages is None:
         ages_arr = np.arange(T, dtype=float)
     else:
         ages_arr = np.asarray(ages, dtype=float)
         if ages_arr.shape != (T,):
             raise ValueError(f"ages must have shape ({T},), got {ages_arr.shape}")
+    if weights is None:
+        w_arr = np.ones((T, N), dtype=float)
+    else:
+        w = np.asarray(weights, dtype=float)
+        if w.ndim == 1:
+            if w.shape != (N,):
+                raise ValueError(f"weights length must be N={N}, got {w.shape}")
+            w_arr = np.broadcast_to(w, (T, N))
+        elif w.shape == (T, N):
+            w_arr = w
+        else:
+            raise ValueError(f"weights must be (N,) or (T, N), got {w.shape}")
     qs = tuple(float(q) for q in quantiles)
     rows = []
     for t in range(T):
         xt = arr[t]
-        xt = xt[np.isfinite(xt)]
+        wt = w_arr[t]
+        ok = np.isfinite(xt) & np.isfinite(wt) & (wt > 0)
+        xt = xt[ok]
+        wt = wt[ok]
         row = {
             "t": t,
             "age": float(ages_arr[t]),
-            "mean": float(np.mean(xt)) if xt.size else float("nan"),
+            "mean": float(wmean(xt, wt)) if xt.size else float("nan"),
         }
         if xt.size:
-            qvals = np.quantile(xt, qs)
+            qvals = wquantile(xt, wt, qs)
+            qvals = np.atleast_1d(qvals)
             for q, v in zip(qs, qvals):
                 row[_qcol(q)] = float(v)
         else:
@@ -97,6 +118,7 @@ def cohort_lifecycle_profiles(
     variables: Optional[Iterable[str]] = None,
     ages: Optional[np.ndarray] = None,
     quantiles: Sequence[float] = DEFAULT_QUANTILES,
+    weights: Optional[np.ndarray] = None,
 ) -> pd.DataFrame:
     """
     Stack age profiles for several simulated series into a long table.
@@ -111,13 +133,23 @@ def cohort_lifecycle_profiles(
         consumption, and income.
     ages :
         Chronological ages length T. Prefer ``model.ages``.
+    weights :
+        Optional length-N (or (T, N)) agent weights. If omitted and
+        ``paths`` contains ``weight``, that is used.
     """
     vars_ = tuple(variables) if variables is not None else DEFAULT_VARIABLES
+    if weights is None and "weight" in paths:
+        weights = np.asarray(paths["weight"], dtype=float)
     frames = []
     for name in vars_:
         if name not in paths:
             raise KeyError(f"simulated path '{name}' not found; have {sorted(paths)}")
-        df = age_profile(np.asarray(paths[name]), ages=ages, quantiles=quantiles)
+        df = age_profile(
+            np.asarray(paths[name]),
+            ages=ages,
+            quantiles=quantiles,
+            weights=weights,
+        )
         df.insert(0, "variable", name)
         frames.append(df)
     return pd.concat(frames, ignore_index=True)
@@ -128,6 +160,7 @@ def profiles_from_sim(
     variables: Optional[Iterable[str]] = None,
     ages: Optional[np.ndarray] = None,
     quantiles: Sequence[float] = DEFAULT_QUANTILES,
+    weights: Optional[np.ndarray] = None,
 ) -> pd.DataFrame:
     """
     Convenience wrapper accepting a dict or ``model.sim`` namespace.
@@ -138,14 +171,20 @@ def profiles_from_sim(
         paths = {k: v for k, v in vars(sim).items() if isinstance(v, np.ndarray)}
         if ages is None and hasattr(sim, "ages"):
             ages = np.asarray(sim.ages, dtype=float)
+        if weights is None and hasattr(sim, "weight"):
+            weights = np.asarray(sim.weight, dtype=float)
     else:
         paths = dict(sim)  # type: ignore[arg-type]
         if ages is None and "ages" in paths and np.asarray(paths["ages"]).ndim == 1:
             ages = np.asarray(paths["ages"], dtype=float)
     # Do not treat the ages vector as a simulated path variable
-    paths = {k: v for k, v in paths.items() if k != "ages" and np.asarray(v).ndim == 2}
+    paths = {k: v for k, v in paths.items() if k != "ages" and np.asarray(v).ndim >= 1}
+    path2 = {k: v for k, v in paths.items() if np.asarray(v).ndim == 2}
+    w = weights
+    if w is None and "weight" in paths:
+        w = np.asarray(paths["weight"], dtype=float)
     return cohort_lifecycle_profiles(
-        paths, variables=variables, ages=ages, quantiles=quantiles
+        path2, variables=variables, ages=ages, quantiles=quantiles, weights=w
     )
 
 

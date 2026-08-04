@@ -30,6 +30,7 @@ class InitialSample:
     Required: liquid cash-on-hand ``m``, housing ``h``, income index ``i_z``,
     return index ``i_r``. Optional ``t_age`` is the life-cycle period index
     (needed for mixed-age panels; ignored / forced to 0 for young cohorts).
+    Optional ``weight`` is a per-agent sample weight (default ones).
     """
 
     m: np.ndarray
@@ -37,6 +38,7 @@ class InitialSample:
     i_z: np.ndarray
     i_r: np.ndarray
     t_age: Optional[np.ndarray] = None
+    weight: Optional[np.ndarray] = None
 
     def __post_init__(self) -> None:
         self.m = np.asarray(self.m, dtype=float).ravel()
@@ -51,6 +53,14 @@ class InitialSample:
             self.t_age = np.asarray(self.t_age, dtype=int).ravel()
             if self.t_age.size != n:
                 raise ValueError(f"t_age length {self.t_age.size} != m length {n}")
+        if self.weight is None:
+            self.weight = np.ones(n, dtype=float)
+        else:
+            self.weight = np.asarray(self.weight, dtype=float).ravel()
+            if self.weight.size != n:
+                raise ValueError(f"weight length {self.weight.size} != m length {n}")
+            if np.any(~np.isfinite(self.weight)) or np.any(self.weight < 0):
+                raise ValueError("weight must be finite and nonnegative")
 
     @property
     def N(self) -> int:
@@ -78,6 +88,7 @@ class InitialSample:
             i_z=self.i_z.copy(),
             i_r=self.i_r.copy(),
             t_age=None if self.t_age is None else self.t_age.copy(),
+            weight=None if self.weight is None else self.weight.copy(),
         )
 
     def with_t_age(self, t_age: Union[int, np.ndarray]) -> "InitialSample":
@@ -98,15 +109,17 @@ class InitialSample:
         i_z: Sequence[int],
         i_r: Sequence[int],
         t_age: Optional[Sequence[int]] = None,
+        weight: Optional[Sequence[float]] = None,
     ) -> "InitialSample":
-        return cls(m=m, h=h, i_z=i_z, i_r=i_r, t_age=t_age)
+        return cls(m=m, h=h, i_z=i_z, i_r=i_r, t_age=t_age, weight=weight)
 
     @classmethod
     def from_placeholder_csv(cls, path: Union[str, Path]) -> "InitialSample":
         """
         Load a placeholder initial sample from CSV.
 
-        Expected columns: ``m``, ``h``, ``i_z``, ``i_r``, and optionally ``t_age``.
+        Expected columns: ``m``, ``h``, ``i_z``, ``i_r``, and optionally
+        ``t_age`` and ``weight``.
         Real Canadian microdata mapping is left for the calibration stage.
         """
         path = Path(path)
@@ -120,12 +133,14 @@ class InitialSample:
         if missing:
             raise ValueError(f"CSV missing columns {missing}; need {required}")
         t_age = df["t_age"].to_numpy() if "t_age" in df.columns else None
+        weight = df["weight"].to_numpy() if "weight" in df.columns else None
         return cls(
             m=df["m"].to_numpy(),
             h=df["h"].to_numpy(),
             i_z=df["i_z"].to_numpy(),
             i_r=df["i_r"].to_numpy(),
             t_age=t_age,
+            weight=weight,
         )
 
 
@@ -170,4 +185,6 @@ class InitialDistribution:
             ages = rng.integers(0, T, size=n)
         else:
             ages = np.zeros(n, dtype=int)
-        return InitialSample(m=m, h=h, i_z=i_z, i_r=i_r, t_age=ages)
+        return InitialSample(
+            m=m, h=h, i_z=i_z, i_r=i_r, t_age=ages, weight=np.ones(n, dtype=float)
+        )

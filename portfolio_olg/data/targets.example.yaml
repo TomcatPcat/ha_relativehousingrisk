@@ -1,11 +1,20 @@
-# Example calibration targets (fill in later; not estimated)
+# Example calibration targets (fill from scripts/run_survey_moments.py)
 # Labels oriented to Canadian housing + financial portfolio moments.
 moments:
+  # SFS (ex-auto wealth identity; report by year in output/survey/)
+  homeownership_rate: null
+  housing_share_of_net_worth_gross: null
+  housing_share_of_net_worth_net: null
+  financial_share_of_net_worth_gross: null
+  financial_share_of_net_worth_net: null
+  net_worth_to_net_income: null
+  # SHS (aggregate C/Y after tax+transfers; Tier A preferred for recent years)
+  consumption_to_net_income: null
+  # Legacy / inequality placeholders
   wealth_gini: null
   top10_wealth_share: null
   mean_liquid: null
   mean_housing: null
-  housing_share_of_net_worth: null
   financial_return_vol: null
   housing_return_vol: null
   return_correlation: null

@@ -11,6 +11,7 @@ import numpy as np
 
 from ..inequality import gini
 from ..returns_ca import CanadaReturnParams
+from ..survey.weighted import wmean
 from .initial import InitialDistribution, InitialSample
 from .model import HousingFinanceModel, HousingFinanceParams
 from .simulate import OnTerminal, simulate_cohort, simulate_panel
@@ -230,31 +231,54 @@ class DecisionSimulation:
             h = np.asarray(cohort["h"], dtype=float)
             m = np.asarray(cohort["m"], dtype=float)
             adj = np.asarray(cohort["adj"], dtype=float)
-            stats["cohort_mean_net_worth"] = float(np.nanmean(nw))
-            stats["cohort_mean_c"] = float(np.nanmean(c))
-            stats["cohort_mean_h"] = float(np.nanmean(h))
-            stats["cohort_mean_m"] = float(np.nanmean(m))
-            stats["cohort_adj_rate"] = float(np.nanmean(adj))
+            w = np.asarray(
+                cohort.get("weight", np.ones(nw.shape[1], dtype=float)),
+                dtype=float,
+            )
+            if w.ndim == 1:
+                w2 = np.broadcast_to(w, nw.shape)
+            else:
+                w2 = w
+            stats["cohort_mean_net_worth"] = float(wmean(nw.ravel(), w2.ravel()))
+            stats["cohort_mean_c"] = float(wmean(c.ravel(), w2.ravel()))
+            stats["cohort_mean_h"] = float(wmean(h.ravel(), w2.ravel()))
+            stats["cohort_mean_m"] = float(wmean(m.ravel(), w2.ravel()))
+            stats["cohort_adj_rate"] = float(wmean(adj.ravel(), w2.ravel()))
             # Age-profile anchors: first / mid / last period mean NW
             T = nw.shape[0]
-            stats["cohort_nw_age_min"] = float(np.nanmean(nw[0]))
-            stats["cohort_nw_age_mid"] = float(np.nanmean(nw[T // 2]))
-            stats["cohort_nw_age_max"] = float(np.nanmean(nw[-1]))
+            stats["cohort_nw_age_min"] = float(wmean(nw[0], w2[0]))
+            stats["cohort_nw_age_mid"] = float(wmean(nw[T // 2], w2[T // 2]))
+            stats["cohort_nw_age_max"] = float(wmean(nw[-1], w2[-1]))
 
         if panel is not None:
             nw = np.asarray(panel["net_worth"], dtype=float)
             alive = np.asarray(panel["alive"], dtype=bool)
             last = nw.shape[0] - 1
-            nw_last = nw[last][alive[last]]
-            stats["panel_mean_net_worth_last"] = (
-                float(np.nanmean(nw_last)) if nw_last.size else float("nan")
+            w = np.asarray(
+                panel.get("weight", np.ones(nw.shape[1], dtype=float)),
+                dtype=float,
             )
-            stats["panel_gini_net_worth_last"] = gini(nw_last)
-            stats["panel_mean_c"] = float(np.nanmean(panel["c"]))
+            if w.ndim > 1:
+                w_last = w[last]
+            else:
+                w_last = w
+            mask = alive[last]
+            nw_last = nw[last][mask]
+            w_alive = w_last[mask]
+            stats["panel_mean_net_worth_last"] = (
+                float(wmean(nw_last, w_alive)) if nw_last.size else float("nan")
+            )
+            stats["panel_gini_net_worth_last"] = gini(nw_last, w_alive)
+            c_panel = np.asarray(panel["c"], dtype=float)
+            if w.ndim == 1:
+                w_c = np.broadcast_to(w, c_panel.shape)
+            else:
+                w_c = w
+            stats["panel_mean_c"] = float(wmean(c_panel.ravel(), w_c.ravel()))
             stats["panel_n_alive_last"] = float(alive[last].sum())
             chron = np.asarray(panel["chronological_age"], dtype=float)
             stats["panel_mean_age_last"] = float(
-                np.nanmean(chron[last][alive[last]]) if alive[last].any() else np.nan
+                wmean(chron[last][mask], w_alive) if mask.any() else np.nan
             )
 
         stats["period_years"] = float(model.period_years)

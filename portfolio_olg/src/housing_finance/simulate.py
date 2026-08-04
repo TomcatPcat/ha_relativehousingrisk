@@ -180,6 +180,11 @@ def simulate_cohort(
     i_z = sample.i_z.copy()
     i_r = sample.i_r.copy()
     alive = np.ones(N, dtype=bool)
+    weight = (
+        sample.weight.copy()
+        if sample.weight is not None
+        else np.ones(N, dtype=float)
+    )
 
     c_path = np.zeros((T, N))
     m_path = np.zeros((T, N))
@@ -244,6 +249,7 @@ def simulate_cohort(
         "alive": np.ones((T, N), dtype=bool),
         "t_age": np.tile(np.arange(T)[:, None], (1, N)),
         "chronological_age": np.tile(model.ages[:, None], (1, N)),
+        "weight": weight,
     }
 
 
@@ -296,6 +302,11 @@ def simulate_panel(
     i_r = sample.i_r.copy()
     t_age = sample.t_age.copy()
     alive = np.ones(N, dtype=bool)
+    weight = (
+        sample.weight.copy()
+        if sample.weight is not None
+        else np.ones(N, dtype=float)
+    )
 
     c_path = np.full((n_periods, N), np.nan)
     m_path = np.full((n_periods, N), np.nan)
@@ -379,6 +390,11 @@ def simulate_panel(
                 i_z[idxs] = repl.i_z
                 i_r[idxs] = repl.i_r
                 t_age[idxs] = 0
+                weight[idxs] = (
+                    repl.weight
+                    if repl.weight is not None
+                    else np.ones(n_rep, dtype=float)
+                )
 
     return {
         "c": c_path,
@@ -393,6 +409,7 @@ def simulate_panel(
         "alive": alive_path,
         "t_age": t_age_path,
         "chronological_age": chron_path,
+        "weight": weight,
         "on_terminal": on_terminal,
         "n_periods": float(n_periods),
     }
