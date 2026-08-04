@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from types import SimpleNamespace
-from typing import Optional
+from typing import Optional, Sequence, Union
 
 import numpy as np
 
@@ -18,6 +18,7 @@ from ..age_grid import (
 )
 from ..returns_ca import CanadaReturnParams, JointReturnChain, discretize_canada_returns
 from . import solve as solve_mod
+from .income_age import build_age_income_factors
 
 
 def _rouwenhorst_income(rho: float, sigma: float, n: int) -> tuple:
@@ -63,6 +64,11 @@ class HousingFinanceParams:
     n_c: int = 12
     simN: int = 2_000
     sim_seed: int = 1
+    # Log age-income profile g_t of length T (None → inc_age_deterministic ≡ 0)
+    age_income_profile: Optional[Union[np.ndarray, Sequence[float]]] = None
+    # De Nardi warm-glow bequest (phi=0 → consume all at terminal age)
+    bequest_phi: float = 0.0
+    bequest_k: float = 1e-4
 
 
 class HousingFinanceModel:
@@ -117,6 +123,10 @@ class HousingFinanceModel:
         self.Rf = self.return_chain.Rf
         self.Rh = self.return_chain.Rh
         self.Pi_r = self.return_chain.Pi
+        self.y_age_factor = build_age_income_factors(
+            self.ages, profile=par.age_income_profile
+        )
+        self.g_age = np.log(np.maximum(self.y_age_factor, 1e-300))
 
     def solve(self) -> None:
         par = self.par
@@ -138,6 +148,8 @@ class HousingFinanceModel:
             par.h_ubar,
             par.tau,
             par.n_c,
+            par.bequest_phi,
+            par.bequest_k,
         )
         V[T - 1] = Vt
         c_pol[T - 1] = ct
@@ -161,6 +173,7 @@ class HousingFinanceModel:
                 par.tau,
                 self.delta_period,
                 par.n_c,
+                float(self.y_age_factor[t + 1]),
             )
             V[t] = Vt
             c_pol[t] = ct

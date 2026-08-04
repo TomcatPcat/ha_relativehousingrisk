@@ -76,6 +76,27 @@ def _draw_next_states(
     return i_zp, i_rp
 
 
+def _labor_income(
+    model: "HousingFinanceModel",
+    t_age: np.ndarray,
+    i_z: np.ndarray,
+) -> np.ndarray:
+    """y = exp(g(age)) * z at each agent's life-cycle index."""
+    factors = getattr(model, "y_age_factor", None)
+    if factors is None:
+        return model.z_grid[i_z]
+    t_idx = np.clip(np.asarray(t_age, dtype=int), 0, factors.size - 1)
+    return factors[t_idx] * model.z_grid[i_z]
+
+
+def _labor_income_next(
+    model: "HousingFinanceModel",
+    t_age_next: np.ndarray,
+    i_zp: np.ndarray,
+) -> np.ndarray:
+    return _labor_income(model, t_age_next, i_zp)
+
+
 def _policies_at_ages(
     model: "HousingFinanceModel",
     t_age: np.ndarray,
@@ -176,7 +197,7 @@ def simulate_cohort(
 
     for t in range(T):
         t_age = np.full(N, t, dtype=int)
-        y = model.z_grid[i_z]
+        y = _labor_income(model, t_age, i_z)
         m_path[t] = m
         h_path[t] = h
         y_path[t] = y
@@ -203,7 +224,7 @@ def simulate_cohort(
             Rf = mean_f + mult * (Rf - mean_f)
             Rf = np.maximum(Rf, 0.01)
 
-        m = Rf * a + model.z_grid[i_zp]
+        m = Rf * a + _labor_income(model, np.full(N, t + 1, dtype=int), i_zp)
         h = Rh * (1.0 - delta) * h_end
         m = np.clip(m, model.grid_m[0], model.grid_m[-1] * 1.5)
         h = np.clip(h, model.grid_h[0], model.grid_h[-1] * 1.5)
@@ -301,7 +322,7 @@ def simulate_panel(
 
         m_path[k] = np.where(alive, m, np.nan)
         h_path[k] = np.where(alive, h, np.nan)
-        y = model.z_grid[i_z]
+        y = _labor_income(model, t_age, i_z)
         y_path[k] = np.where(alive, y, np.nan)
         nw_path[k] = np.where(alive, m + h, np.nan)
         Rf_path[k] = np.where(alive, model.Rf[i_r], np.nan)
@@ -330,7 +351,8 @@ def simulate_panel(
             Rf = mean_f + mult * (Rf - mean_f)
             Rf = np.maximum(Rf, 0.01)
 
-        m_next = Rf * a + model.z_grid[i_zp]
+        t_next = t_age + 1
+        m_next = Rf * a + _labor_income(model, t_next, i_zp)
         h_next = Rh * (1.0 - delta) * h_end
         m_next = np.clip(m_next, model.grid_m[0], model.grid_m[-1] * 1.5)
         h_next = np.clip(h_next, model.grid_h[0], model.grid_h[-1] * 1.5)

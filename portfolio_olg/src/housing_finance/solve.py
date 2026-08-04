@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 from numba import njit, prange
 
-from .utility import u
+from .utility import bequest_u, bequest_wealth, u
 
 
 @njit(fastmath=True)
@@ -63,8 +63,9 @@ def expected_continuation(
     Rh,
     Pi_r,
     delta,
+    y_scale_next,
 ):
-    """E[V(m',h',z',r') | a, h_end, z, r]."""
+    """E[V(m',h',z',r') | a, h_end, z, r] with y' = y_scale_next * z'."""
     nz = z_grid.size
     nr = Rf.size
     ev = 0.0
@@ -72,7 +73,7 @@ def expected_continuation(
         pz = Pi_z[i_z, i_zp]
         if pz <= 0.0:
             continue
-        y = z_grid[i_zp]
+        y = y_scale_next * z_grid[i_zp]
         for i_rp in range(nr):
             pr = Pi_r[i_r, i_rp]
             if pr <= 0.0:
@@ -103,12 +104,14 @@ def solve_period(
     tau,
     delta,
     n_c,
+    y_scale_next,
 ):
     """
     Solve one age given continuation V_next[m,h,z,r].
 
     Returns V, c_pol, h_pol, adj_pol with same shape as state grids.
     h_pol is end-of-period housing; adj_pol=1 if adjust.
+    ``y_scale_next`` is exp(g(age_{t+1})) for next-period labor income.
     """
     nm = grid_m.size
     nh = grid_h.size
@@ -154,6 +157,7 @@ def solve_period(
                                 Rh,
                                 Pi_r,
                                 delta,
+                                y_scale_next,
                             )
                             val = u(c, h, alpha, rho, h_ubar) + beta * cont
                             if val > best_v:
@@ -176,6 +180,7 @@ def solve_period(
                             Rh,
                             Pi_r,
                             delta,
+                            y_scale_next,
                         )
                         best_v = u(1e-12, h, alpha, rho, h_ubar) + beta * cont
                         best_c = 1e-12
@@ -209,6 +214,7 @@ def solve_period(
                                     Rh,
                                     Pi_r,
                                     delta,
+                                    y_scale_next,
                                 )
                                 val = u(c, h_new, alpha, rho, h_ubar) + beta * cont
                                 if val > best_v:
@@ -237,8 +243,15 @@ def solve_terminal(
     h_ubar,
     tau,
     n_c,
+    bequest_phi,
+    bequest_k,
 ):
-    """Last period: sell housing (pay tau) and consume."""
+    """
+    Last period: liquidate housing, choose c vs warm-glow bequest.
+
+    X = bequest_wealth(m, h, tau). If bequest_phi <= 0, consume all (c = X).
+    Else max_c u(c, h) + bequest_u(X - c).
+    """
     nm = grid_m.size
     nh = grid_h.size
     nz = z_grid.size
@@ -249,12 +262,39 @@ def solve_terminal(
     adj_pol = np.ones((nm, nh, nz, nr))
     for i_m in range(nm):
         for i_h in range(nh):
-            x = grid_m[i_m] + (1.0 - tau) * grid_h[i_h]
-            c = max(x, 1e-12)
-            # utility from consuming resources; housing services from pre-sale h
-            val = u(c, grid_h[i_h], alpha, rho, h_ubar)
+            h = grid_h[i_h]
+            X = bequest_wealth(grid_m[i_m], h, tau)
+            X = max(X, 1e-12)
+            if bequest_phi <= 0.0:
+                c_star = X
+                val = u(c_star, h, alpha, rho, h_ubar)
+            else:
+                best_v = -1e300
+                c_star = X
+                for ic in range(n_c):
+                    c = (ic + 1) / n_c * X
+                    W = X - c
+                    if W < -1e-12:
+                        continue
+                    W = max(W, 0.0)
+                    val_c = u(c, h, alpha, rho, h_ubar) + bequest_u(
+                        W, bequest_phi, bequest_k, rho
+                    )
+                    if val_c > best_v:
+                        best_v = val_c
+                        c_star = c
+                # also evaluate corner leave almost all / consume almost all
+                for c in (1e-12, X):
+                    W = max(X - c, 0.0)
+                    val_c = u(max(c, 1e-12), h, alpha, rho, h_ubar) + bequest_u(
+                        W, bequest_phi, bequest_k, rho
+                    )
+                    if val_c > best_v:
+                        best_v = val_c
+                        c_star = max(c, 1e-12)
+                val = best_v
             for i_z in range(nz):
                 for i_r in range(nr):
                     V[i_m, i_h, i_z, i_r] = val
-                    c_pol[i_m, i_h, i_z, i_r] = c
+                    c_pol[i_m, i_h, i_z, i_r] = c_star
     return V, c_pol, h_pol, adj_pol

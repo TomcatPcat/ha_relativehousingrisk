@@ -32,8 +32,9 @@ u(c,h)
 | \(\beta\) | `beta` | **Annual** discount factor (compounded to the model period; see §2) |
 
 Life span is always chronological ages \([\texttt{age\_min},\texttt{age\_max}]\)
-(default 25 to 80) discretized into `T` periods. No bequest motive: at the
-last period the agent consumes remaining resources under keep/adjust (see §5).
+(default 25 to 80) discretized into `T` periods. Terminal age uses a De Nardi
+warm-glow bequest in net worth (see §6); with `bequest_phi=0` the agent consumes
+all liquidated resources (legacy behavior).
 
 ---
 
@@ -88,8 +89,19 @@ income and returns have realized:
 | \(z_t\) | Labor-income productivity state |
 | \(s_t\) | Joint return state that indexes \((R^f_t,R^h_t)\) |
 
-Labor income is \(y_t=z_t\) on a unit-normalized Rouwenhorst grid
-(`rho_z`, `sigma_z`, `Nz`).
+Labor income combines a **deterministic age profile** with the stochastic
+factor \(z_t\) (unit-normalized Rouwenhorst; `rho_z`, `sigma_z`, `Nz`):
+
+\[
+\log y_t = g(\mathrm{age}(t)) + \log z_t
+\quad\Leftrightarrow\quad
+y_t = e^{g(\mathrm{age}(t))}\,z_t.
+\]
+
+The placeholder \(g(\cdot)=\) `inc_age_deterministic(age)` is **identically zero**
+until data are supplied. Override with `HousingFinanceParams.age_income_profile`
+(length-\(T\) array of log effects \(g_t\)). Multiplicative factors are stored as
+`model.y_age_factor`.
 
 ---
 
@@ -148,7 +160,7 @@ R^h_{t+1}\,(1-\delta)\,h^{\mathrm{end}}_t,
 \\
 y_{t+1}
 &=
-z_{t+1}.
+e^{g(\mathrm{age}(t+1))}\,z_{t+1}.
 \end{aligned}
 \]
 
@@ -183,7 +195,7 @@ V^{\mathrm{keep}}_t
 u(c,h)
 +
 \beta\,\mathbb{E}_t\bigl[
-V_{t+1}\bigl(R^{f\prime}(m-c)+z',\;R^{h\prime}(1-\delta)h,\;z',s'\bigr)
+V_{t+1}\bigl(R^{f\prime}(m-c)+y',\;R^{h\prime}(1-\delta)h,\;z',s'\bigr)
 \bigr]
 \Biggr\}.
 \]
@@ -200,7 +212,7 @@ a\ge 0,\;c>0,\;h^{\mathrm{new}}\ge 0}}
 u(c,h^{\mathrm{new}})
 +
 \beta\,\mathbb{E}_t\bigl[
-V_{t+1}\bigl(R^{f\prime}a+z',\;R^{h\prime}(1-\delta)h^{\mathrm{new}},\;z',s'\bigr)
+V_{t+1}\bigl(R^{f\prime}a+y',\;R^{h\prime}(1-\delta)h^{\mathrm{new}},\;z',s'\bigr)
 \bigr]
 \Biggr\},
 \]
@@ -211,8 +223,39 @@ Expectations are over \(z'\sim\Pi^z(\cdot\mid z)\) and \(s'\sim\Pi^r(\cdot\mid s
 
 ### Terminal period \(t=T-1\) (age \(\overline{a}\))
 
-No continuation (\(\beta\) term dropped). The agent maximizes period utility only,
-still choosing keep vs adjust.
+No continuation value. Housing is liquidated for the bequest margin:
+
+\[
+X = m + (1-\tau)h
+=
+\texttt{bequest\_wealth}(m,h,\tau).
+\]
+
+De Nardi (2004)-style warm-glow (same CRRA \(\rho\); De Nardi–Yang is the same
+class with calibrated \((\phi,\kappa)\)):
+
+\[
+\upsilon(W)
+=
+\phi\cdot
+\begin{cases}
+\dfrac{(W+\kappa)^{1-\rho}-1}{1-\rho} & \rho\neq 1,\\
+\log(W+\kappa) & \rho=1,
+\end{cases}
+\]
+
+\[
+V_T
+=
+\max_{c\in(0,X]}
+\bigl\{
+u(c,h) + \upsilon(X-c)
+\bigr\}.
+\]
+
+Parameters: `bequest_phi` (\(\phi\), default 0 → consume all, \(c=X\)),
+`bequest_k` (\(\kappa\), default \(10^{-4}\)). The wealth aggregator is a hook
+for later housing/financial splits.
 
 ---
 
@@ -340,7 +383,9 @@ shares) are computed on the cross-section each calendar date
 
 - Mortgages / LTV / amortization → see `../housing_mortgage/`
 - General-equilibrium house prices
+- Estimated \(g(\mathrm{age})\) from Canadian earnings data (profile hook ready)
 - Estimated Canadian SMM (targets file is a placeholder only; optimizer not wired)
+- Housing/financial split in bequest wealth (aggregator hook ready)
 
 ---
 
@@ -349,8 +394,9 @@ shares) are computed on the cross-section each calendar date
 | Piece | Location |
 |-------|----------|
 | Age / period mapping | `src/age_grid.py` |
-| Utility | `src/housing_finance/utility.py` |
-| VFI keep/adjust | `src/housing_finance/solve.py` |
+| Age-income placeholder \(g(\mathrm{age})\) | `src/housing_finance/income_age.py` |
+| Utility + bequest | `src/housing_finance/utility.py` |
+| VFI keep/adjust / terminal | `src/housing_finance/solve.py` |
 | Grids / solve / simulate API | `src/housing_finance/model.py` |
 | Initial conditions | `src/housing_finance/initial.py` |
 | Cohort / panel sims | `src/housing_finance/simulate.py` |
