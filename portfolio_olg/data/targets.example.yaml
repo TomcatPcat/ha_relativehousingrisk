@@ -1,5 +1,12 @@
 # Example calibration targets (fill in later; not estimated)
+# Labels oriented to Canadian housing + financial portfolio moments.
 moments:
-  wealth_gini: None
-  top10_wealth_share: None
-  mean_risky_share: None
+  wealth_gini: null
+  top10_wealth_share: null
+  mean_liquid: null
+  mean_housing: null
+  housing_share_of_net_worth: null
+  financial_return_vol: null
+  housing_return_vol: null
+  return_correlation: null
+  adjust_rate: null
