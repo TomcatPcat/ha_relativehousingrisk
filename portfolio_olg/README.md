@@ -50,6 +50,14 @@ portfolio_olg/
 
 ## Quick start (primary)
 
+Interactive checks (recommended):
+
+```bash
+jupyter notebook notebooks/02_run_and_check_housing_finance.ipynb
+```
+
+Or scripts:
+
 ```bash
 python scripts/run_returns_ca.py
 python scripts/run_housing_finance_baseline.py
