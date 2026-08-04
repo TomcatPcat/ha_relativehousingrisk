@@ -46,17 +46,23 @@ def main() -> None:
     print(f"  mean net worth={model.sim.net_worth.mean():.3f}")
 
     fig, ax = plt.subplots(figsize=(7, 4))
-    ax.plot(model.sim.m.mean(axis=1), label="liquid m")
-    ax.plot(model.sim.h.mean(axis=1), label="housing h")
-    ax.plot(model.sim.c.mean(axis=1), label="consumption c")
-    ax.plot(model.sim.net_worth.mean(axis=1), label="net worth")
-    ax.set_xlabel("age / period")
-    ax.set_title("Housing-finance baseline (Canada returns placeholders)")
+    ages = model.ages
+    ax.plot(ages, model.sim.m.mean(axis=1), label="liquid m")
+    ax.plot(ages, model.sim.h.mean(axis=1), label="housing h")
+    ax.plot(ages, model.sim.c.mean(axis=1), label="consumption c")
+    ax.plot(ages, model.sim.net_worth.mean(axis=1), label="net worth")
+    ax.set_xlabel("Age")
+    ax.set_title(
+        f"Housing-finance baseline (ages {par.age_min:.0f}–{par.age_max:.0f}, "
+        f"Δ={model.period_years:.2f}y)"
+    )
     ax.legend()
     fig.tight_layout()
     path = out_dir / "housing_finance_baseline.png"
     fig.savefig(path, dpi=120)
     plt.close(fig)
+    print(f"  ages={ages}")
+    print(f"  period_years={model.period_years:.4f}")
     print(f"Wrote {path}")
     print("Housing-finance baseline OK.")
 

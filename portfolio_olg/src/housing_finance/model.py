@@ -8,6 +8,14 @@ from typing import Optional
 
 import numpy as np
 
+from ..age_grid import (
+    chronological_ages,
+    compound_ar1_annual_to_period,
+    period_years,
+    scale_beta_annual_to_period,
+    scale_delta_annual_to_period,
+    scale_return_params_to_period,
+)
 from ..returns_ca import CanadaReturnParams, JointReturnChain, discretize_canada_returns
 from . import solve as solve_mod
 
@@ -25,7 +33,19 @@ def _rouwenhorst_income(rho: float, sigma: float, n: int) -> tuple:
 
 @dataclass
 class HousingFinanceParams:
+    """
+    Life-cycle parameters.
+
+    ``T`` periods always span chronological ages ``[age_min, age_max]`` with
+    equal spacing. Annual placeholders (``beta``, ``delta``, income AR(1),
+    ``returns``) are compounded to the model period length
+    ``(age_max - age_min) / (T - 1)`` years inside ``HousingFinanceModel``.
+    """
+
     T: int = 8
+    age_min: float = 25.0
+    age_max: float = 80.0
+    # Annual placeholders (compounded to period frequency in the model)
     beta: float = 0.96
     alpha: float = 0.7
     rho: float = 2.0
@@ -52,9 +72,37 @@ class HousingFinanceModel:
         self,
         params: Optional[HousingFinanceParams] = None,
         return_chain: Optional[JointReturnChain] = None,
+        *,
+        scale_annual_to_period: bool = True,
     ):
         self.par = params or HousingFinanceParams()
-        self.return_chain = return_chain or discretize_canada_returns(self.par.returns)
+        par = self.par
+        self.ages = chronological_ages(par.T, par.age_min, par.age_max)
+        self.period_years = (
+            period_years(par.T, par.age_min, par.age_max) if par.T >= 2 else 0.0
+        )
+        self.scale_annual_to_period = scale_annual_to_period
+
+        dy = self.period_years if (scale_annual_to_period and par.T >= 2) else 1.0
+        self.beta_period = (
+            scale_beta_annual_to_period(par.beta, dy) if scale_annual_to_period else par.beta
+        )
+        self.delta_period = (
+            scale_delta_annual_to_period(par.delta, dy)
+            if scale_annual_to_period
+            else par.delta
+        )
+        if scale_annual_to_period and par.T >= 2:
+            self.rho_z_period, self.sigma_z_period = compound_ar1_annual_to_period(
+                par.rho_z, par.sigma_z, dy
+            )
+            period_returns = scale_return_params_to_period(par.returns, dy)
+        else:
+            self.rho_z_period, self.sigma_z_period = par.rho_z, par.sigma_z
+            period_returns = par.returns
+
+        self.returns_period = period_returns
+        self.return_chain = return_chain or discretize_canada_returns(period_returns)
         self.sol = SimpleNamespace()
         self.sim = SimpleNamespace()
         self._build_grids()
@@ -63,7 +111,9 @@ class HousingFinanceModel:
         par = self.par
         self.grid_m = par.m_max * (np.linspace(0, 1, par.Nm) ** 1.5)
         self.grid_h = par.h_max * (np.linspace(0, 1, par.Nh) ** 1.5)
-        self.z_grid, self.Pi_z = _rouwenhorst_income(par.rho_z, par.sigma_z, par.Nz)
+        self.z_grid, self.Pi_z = _rouwenhorst_income(
+            self.rho_z_period, self.sigma_z_period, par.Nz
+        )
         self.Rf = self.return_chain.Rf
         self.Rh = self.return_chain.Rh
         self.Pi_r = self.return_chain.Pi
@@ -104,12 +154,12 @@ class HousingFinanceModel:
                 self.Rf,
                 self.Rh,
                 self.Pi_r,
-                par.beta,
+                self.beta_period,
                 par.alpha,
                 par.rho,
                 par.h_ubar,
                 par.tau,
-                par.delta,
+                self.delta_period,
                 par.n_c,
             )
             V[t] = Vt
@@ -122,15 +172,62 @@ class HousingFinanceModel:
         self.sol.h_end = h_pol
         self.sol.adj = adj_pol
 
-    def simulate(self, wealth_vol_kappa: float = 0.0, wealth_vol_norm: float = 5.0) -> None:
+    def simulate(
+        self,
+        wealth_vol_kappa: float = 0.0,
+        wealth_vol_norm: float = 5.0,
+        *,
+        initial=None,
+        distribution=None,
+        seed=None,
+        n=None,
+    ) -> None:
         from .simulate import simulate_cohort
 
         if not hasattr(self.sol, "c"):
             raise RuntimeError("Call solve() before simulate()")
         out = simulate_cohort(
             self,
+            initial=initial,
+            distribution=distribution,
+            seed=seed,
+            n=n,
             wealth_vol_kappa=wealth_vol_kappa,
             wealth_vol_norm=wealth_vol_norm,
         )
         for k, v in out.items():
             setattr(self.sim, k, v)
+        self.sim.ages = self.ages.copy()
+        self.sim.period_years = self.period_years
+
+    def simulate_panel(
+        self,
+        n_periods: int,
+        *,
+        initial=None,
+        distribution=None,
+        on_terminal: str = "replace_young",
+        seed=None,
+        n=None,
+        wealth_vol_kappa: float = 0.0,
+        wealth_vol_norm: float = 5.0,
+    ) -> None:
+        from .simulate import simulate_panel
+
+        if not hasattr(self.sol, "c"):
+            raise RuntimeError("Call solve() before simulate_panel()")
+        out = simulate_panel(
+            self,
+            n_periods=n_periods,
+            initial=initial,
+            distribution=distribution,
+            on_terminal=on_terminal,  # type: ignore[arg-type]
+            seed=seed,
+            n=n,
+            wealth_vol_kappa=wealth_vol_kappa,
+            wealth_vol_norm=wealth_vol_norm,
+        )
+        self.sim.panel = SimpleNamespace(
+            **{k: v for k, v in out.items() if not isinstance(v, str)}
+        )
+        self.sim.panel_on_terminal = out.get("on_terminal")
