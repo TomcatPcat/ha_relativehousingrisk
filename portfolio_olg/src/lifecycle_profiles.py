@@ -29,7 +29,11 @@ VARIABLE_LABELS: Dict[str, str] = {
     "c": "Consumption (c)",
     "y": "Labor income (y)",
     "adj": "Housing adjustment indicator",
+    "chronological_age": "Age (years)",
 }
+
+# Panel paths often also track chronological age of the cross-section
+PANEL_VARIABLES: tuple[str, ...] = DEFAULT_VARIABLES + ("chronological_age",)
 
 
 def _qcol(q: float) -> str:
@@ -158,9 +162,11 @@ def plot_lifecycle_profiles(
     show_iqr: bool = True,
     show_p10_p90: bool = True,
     figsize: Optional[tuple] = None,
+    xlabel: str = "Age",
+    xcol: Optional[str] = None,
 ) -> plt.Figure:
     """
-    Plot mean lifecycle paths vs chronological age with optional bands.
+    Plot mean paths vs chronological age (or calendar time) with optional bands.
 
     Expects the long table from ``cohort_lifecycle_profiles``.
     """
@@ -175,7 +181,8 @@ def plot_lifecycle_profiles(
     fig, axes = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False)
     flat = axes.ravel()
 
-    xcol = "age" if "age" in profiles.columns else "t"
+    if xcol is None:
+        xcol = "age" if "age" in profiles.columns else "t"
 
     for i, name in enumerate(vars_):
         ax = flat[i]
@@ -203,7 +210,7 @@ def plot_lifecycle_profiles(
         ax.plot(x, mean, color="C0", lw=2, label="mean")
         if "q50" in sub.columns:
             ax.plot(x, sub["q50"], color="C0", lw=1.5, ls="--", label="median")
-        ax.set_xlabel("Age")
+        ax.set_xlabel(xlabel)
         ax.set_title(VARIABLE_LABELS.get(name, name))
         ax.legend(loc="best", fontsize=8)
 
