@@ -1,0 +1,64 @@
+{
+  "estimates": {
+    "mean_log_f": 0.06823565045291875,
+    "mean_log_h": 0.02352056872309465,
+    "exp_mean_log_f": 1.0706175702701413,
+    "exp_mean_log_h": 1.0237993587755752,
+    "mean_Rf_gross": 1.0808085242204715,
+    "mean_Rh_gross": 1.0260093599052504,
+    "rho_f": 0.06784256563117537,
+    "rho_h": 0.29937033208517144,
+    "sigma_f": 0.14399723576382292,
+    "sigma_h": 0.06397512231204963,
+    "corr_innov": 0.18276752854224976,
+    "corr_unconditional": 0.03996752417394003,
+    "n_obs": 55.0,
+    "n_obs_ar1": 54.0,
+    "mu_f": 0.06823565045291875,
+    "mu_h": 0.02352056872309465
+  },
+  "canada_return_params": {
+    "Rf_bar": 1.0808085242204715,
+    "Rh_bar": 1.0260093599052504,
+    "rho_f": 0.06784256563117537,
+    "rho_h": 0.29937033208517144,
+    "sigma_f": 0.14399723576382292,
+    "sigma_h": 0.06397512231204963,
+    "corr": 0.18276752854224976,
+    "n_f": 3,
+    "n_h": 3
+  },
+  "mapping_notes": {
+    "mean_log_f": "saved mean log growth (equity); not Rf_bar directly",
+    "mean_log_h": "saved mean log growth (housing); not Rh_bar directly",
+    "mean_Rf_gross": "Rf_bar  (sample mean of exp(\u0394log P))",
+    "mean_Rh_gross": "Rh_bar  (sample mean of exp(\u0394log P))",
+    "rho_f": "rho_f",
+    "rho_h": "rho_h",
+    "sigma_f": "sigma_f",
+    "sigma_h": "sigma_h",
+    "corr_innov": "corr",
+    "equity": "total return (dividends included) for financial asset",
+    "housing": "price-only (no rent) for housing asset"
+  },
+  "meta": {
+    "equity": "equity_comb_real (50/50 S&P500 CAD TR + TSX60 TR)",
+    "housing": "house_real (BIS/CPI)",
+    "returns": "\u0394log real total-return index",
+    "dividends": "Shiller D/12 + Yahoo SP500TR; StatCan yield + XIU/XIC adj"
+  },
+  "simple_return_comparison": {
+    "mu_f": 0.0793919982505733,
+    "mu_h": 0.027438873718877453,
+    "rho_f": 0.0555871983730059,
+    "rho_h": 0.2979054614861363,
+    "sigma_f": 0.14099051989790395,
+    "sigma_h": 0.06471150403676255,
+    "corr_innov": 0.1540620867735244,
+    "corr_unconditional": 0.006247561322038964,
+    "n_obs": 56.0,
+    "n_obs_ar1": 55.0,
+    "mean_Rf_gross": 1.0793919982505733,
+    "mean_Rh_gross": 1.0274388737188775
+  }
+}

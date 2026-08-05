@@ -16,7 +16,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+# Allow running as a script from portfolio_olg/
+import sys
+
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from src.returns_estimate import (  # noqa: E402
+    annual_real_indices,
+    estimate_bivar_ar1_from_indices,
+    estimate_diag_ar1_simple,
+    save_return_estimates,
+)
+
 OUT = ROOT / "output" / "macro_returns"
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -143,6 +155,294 @@ def load_tsx() -> pd.Series:
     s = s.resample("ME").last()
     s.name = "tsx"
     return s
+
+
+def load_tsx60() -> pd.Series:
+    """S&P/TSX 60 index from StatCan table 10-10-0125 (monthly; ~1982–2023)."""
+    df = _statcan_csv("10100125")
+    label_col = next(
+        (c for c in df.columns if "Toronto Stock" in c or "Stock Exchange" in c),
+        None,
+    )
+    if label_col is None:
+        raise RuntimeError("Could not find TSX label column in 10-10-0125")
+    lab = df[label_col].astype(str)
+    mask = lab.str.contains(r"60\s+Index", case=False, regex=True)
+    sub = df.loc[mask, ["REF_DATE", "VALUE"]].dropna()
+    if sub.empty:
+        raise RuntimeError("S&P/TSX 60 Index not found in StatCan 10-10-0125")
+    sub["REF_DATE"] = _parse_ref_date(sub["REF_DATE"])
+    s = sub.dropna().set_index("REF_DATE")["VALUE"].astype(float).sort_index()
+    s = to_month_end(s[~s.index.duplicated(keep="last")])
+    s.name = "tsx60"
+    return s
+
+
+def load_fred(series_id: str) -> pd.Series:
+    """Download a FRED series as a pandas Series indexed by observation date."""
+    import ssl
+
+    ctx = ssl._create_unverified_context()
+    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+    raw = urlopen(url, context=ctx, timeout=60).read()
+    df = pd.read_csv(io.BytesIO(raw))
+    date_col = "observation_date" if "observation_date" in df.columns else df.columns[0]
+    val_col = series_id if series_id in df.columns else df.columns[1]
+    df[date_col] = pd.to_datetime(df[date_col])
+    s = df.set_index(date_col)[val_col].astype(float).sort_index()
+    s = s[np.isfinite(s)]
+    s.name = series_id
+    return s
+
+
+def load_sp500() -> pd.Series:
+    """
+    S&P 500 monthly **price** index (USD).
+
+    Prefer long monthly history from datahub.io (Shiller/S&P); fall back to FRED
+    SP500 (shorter daily sample) if needed.
+    """
+    try:
+        raw = _get("https://datahub.io/core/s-and-p-500/r/data.csv", timeout=90)
+        df = pd.read_csv(io.BytesIO(raw))
+        df["Date"] = pd.to_datetime(df["Date"])
+        s = df.set_index("Date")["SP500"].astype(float).sort_index()
+        s = s[np.isfinite(s) & (s > 0)]
+        s = to_month_end(s[~s.index.duplicated(keep="last")])
+        s.name = "sp500"
+        if s.size >= 120:
+            return s
+    except Exception as exc:  # noqa: BLE001
+        print(f"  WARN: datahub S&P500 failed ({exc}); trying FRED SP500")
+    s = to_month_end(load_fred("SP500"))
+    s.name = "sp500"
+    return s
+
+
+def load_sp500_shiller_table() -> pd.DataFrame:
+    """Shiller/S&P monthly table with ``SP500`` price and annualized ``Dividend``."""
+    raw = _get("https://datahub.io/core/s-and-p-500/r/data.csv", timeout=90)
+    df = pd.read_csv(io.BytesIO(raw))
+    df["Date"] = pd.to_datetime(df["Date"])
+    df = df.set_index("Date")[["SP500", "Dividend"]].astype(float).sort_index()
+    df = df[np.isfinite(df["SP500"]) & (df["SP500"] > 0)]
+    # Recent rows often have Dividend=0 before updates; carry last positive
+    div = df["Dividend"].where(df["Dividend"] > 0)
+    df["Dividend"] = div.ffill()
+    df.index = df.index + pd.offsets.MonthEnd(0)
+    df = df[~df.index.duplicated(keep="last")]
+    return df
+
+
+def load_yahoo_monthly_adj(symbol: str) -> pd.Series:
+    """Yahoo Finance monthly adjusted close (dividend-adjusted ≈ total return)."""
+    import ssl
+
+    ctx = ssl._create_unverified_context()
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        f"?interval=1mo&range=max"
+    )
+    raw = urlopen(Request(url, headers={"User-Agent": UA}), context=ctx, timeout=60).read()
+    payload = json.loads(raw.decode("utf-8"))
+    result = (payload.get("chart") or {}).get("result") or []
+    if not result:
+        raise RuntimeError(f"Yahoo chart empty for {symbol}: {payload.get('chart', {}).get('error')}")
+    res = result[0]
+    ts = res.get("timestamp") or []
+    adj = ((res.get("indicators") or {}).get("adjclose") or [{}])[0].get("adjclose")
+    if not ts or not adj:
+        raise RuntimeError(f"Yahoo adjclose missing for {symbol}")
+    s = pd.Series(adj, index=pd.to_datetime(ts, unit="s"), dtype=float).sort_index()
+    s = s[np.isfinite(s) & (s > 0)]
+    s = to_month_end(s[~s.index.duplicated(keep="last")])
+    s.name = symbol.replace("^", "").replace(".", "_")
+    return s
+
+
+def returns_to_index(r: pd.Series, *, name: str, base: float = 100.0) -> pd.Series:
+    """Cumulative index from simple returns, rebased to ``base`` at first valid."""
+    r = r.astype(float)
+    start = r.first_valid_index()
+    out = pd.Series(np.nan, index=r.index, dtype=float)
+    if start is None:
+        out.name = name
+        return out
+    path = (1.0 + r.loc[start:].fillna(0.0)).cumprod()
+    out.loc[path.index] = base * path / float(path.iloc[0])
+    out.name = name
+    return out
+
+
+def total_return_from_price_and_annual_div(
+    price: pd.Series,
+    annual_div: pd.Series,
+    *,
+    name: str = "tr",
+) -> pd.Series:
+    """
+    Monthly total-return index from price and **annualized** dividend level.
+
+    Uses Shiller-style income: ``R_t = (P_t + D_t/12) / P_{t-1} - 1``.
+    """
+    p = price.astype(float)
+    d = annual_div.reindex(p.index).astype(float).ffill()
+    r = (p + d / 12.0) / p.shift(1) - 1.0
+    return returns_to_index(r, name=name)
+
+
+def total_return_from_price_and_yield(
+    price: pd.Series,
+    yield_pct: pd.Series,
+    *,
+    name: str = "tr",
+) -> pd.Series:
+    """
+    Monthly total-return index from price and annual dividend **yield percent**.
+
+    ``R_t = ΔP/P_{t-1} + y_t/(100·12)`` with yield forward-filled.
+    """
+    p = price.astype(float)
+    y = yield_pct.reindex(p.index).astype(float).ffill()
+    r = p.pct_change(fill_method=None) + y / (100.0 * 12.0)
+    return returns_to_index(r, name=name)
+
+
+def splice_return_series(
+    primary_r: pd.Series,
+    filler_r: pd.Series,
+) -> pd.Series:
+    """Prefer ``primary_r``; fill remaining months from ``filler_r``."""
+    out = primary_r.astype(float).copy()
+    out = out.combine_first(filler_r.astype(float))
+    return out
+
+
+def load_tsx_dividend_yield() -> pd.Series:
+    """TSX Composite dividend yield (%), StatCan 10-10-0125 (ends ~2016)."""
+    df = _statcan_csv("10100125")
+    label_col = next(
+        (c for c in df.columns if "Toronto Stock" in c or "Stock Exchange" in c),
+        None,
+    )
+    if label_col is None:
+        raise RuntimeError("Could not find TSX label column in 10-10-0125")
+    lab = df[label_col].astype(str)
+    mask = lab.str.contains("dividend yields", case=False, na=False)
+    sub = df.loc[mask, ["REF_DATE", "VALUE"]].dropna()
+    if sub.empty:
+        raise RuntimeError("TSX dividend yield not found in StatCan 10-10-0125")
+    sub["REF_DATE"] = _parse_ref_date(sub["REF_DATE"])
+    s = sub.dropna().set_index("REF_DATE")["VALUE"].astype(float).sort_index()
+    s = to_month_end(s[~s.index.duplicated(keep="last")])
+    s.name = "tsx_div_yield"
+    return s
+
+
+def load_sp500_tr_usd() -> pd.Series:
+    """
+    S&P 500 monthly **total return** index (USD).
+
+    Long sample from Shiller price + dividend; after Shiller dividend coverage
+    ends, splice Yahoo ``^SP500TR`` growth when available.
+    """
+    shiller = load_sp500_shiller_table()
+    tr = total_return_from_price_and_annual_div(
+        shiller["SP500"], shiller["Dividend"], name="sp500_tr_usd"
+    )
+    try:
+        yahoo_tr = load_yahoo_monthly_adj("%5ESP500TR")
+        # Splice Yahoo growth after last Shiller month with positive dividend path
+        last = tr.dropna().index.max()
+        y_r = yahoo_tr.pct_change(fill_method=None)
+        t_r = tr.pct_change(fill_method=None)
+        # Prefer Shiller through last; Yahoo thereafter
+        y_r_after = y_r.loc[y_r.index > last]
+        r = t_r.combine_first(y_r)  # fill any holes
+        if not y_r_after.empty:
+            r.loc[y_r_after.index] = y_r_after
+        tr = returns_to_index(r, name="sp500_tr_usd")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  WARN: Yahoo ^SP500TR splice skipped: {exc}")
+    return tr
+
+
+def load_cad_per_usd() -> pd.Series:
+    """CAD per USD monthly average (FRED EXCAUS)."""
+    s = to_month_end(load_fred("EXCAUS"))
+    s.name = "cad_per_usd"
+    return s
+
+
+def equal_weight_combined_index(
+    leg_a: pd.Series,
+    leg_b: pd.Series,
+    *,
+    weight_a: float = 0.5,
+) -> pd.Series:
+    """
+    Build a cumulative index from equal-weight (default 50/50) simple returns.
+
+    Uses overlapping months only. Output rebased to 100 at first valid date.
+    """
+    w_a = float(weight_a)
+    w_b = 1.0 - w_a
+    a = leg_a.astype(float)
+    b = leg_b.astype(float)
+    ra = a.pct_change(fill_method=None)
+    rb = b.pct_change(fill_method=None)
+    both = ra.notna() & rb.notna()
+    r = (w_a * ra + w_b * rb).where(both)
+    start = r.first_valid_index()
+    if start is None:
+        out = pd.Series(np.nan, index=a.index.union(b.index), name="equity_comb")
+        return out
+    path = (1.0 + r.loc[start:].fillna(0.0)).cumprod()
+    out = pd.Series(np.nan, index=a.index.union(b.index), dtype=float)
+    out.loc[path.index] = 100.0 * path / path.iloc[0]
+    out.name = "equity_comb"
+    return out.sort_index()
+
+
+def splice_with_filler(primary: pd.Series, filler: pd.Series) -> pd.Series:
+    """
+    Use ``primary`` over its sample; outside that window use ``filler`` levels,
+    spliced so the series is continuous at the join dates.
+
+    Typical use: S&P/TSX 60 (1982–2023 StatCan) with Composite fill outside.
+    """
+    p = primary.dropna().astype(float).sort_index()
+    f = filler.dropna().astype(float).sort_index()
+    if p.empty:
+        return f.rename(getattr(primary, "name", None))
+    if f.empty:
+        return p
+    idx = p.index.union(f.index).sort_values()
+    out = pd.Series(np.nan, index=idx, dtype=float)
+
+    # Align primary onto filler level at first overlapping date
+    overlap = p.index.intersection(f.index)
+    if overlap.empty:
+        out.loc[p.index] = p
+        return out.rename(p.name)
+
+    join0 = overlap.min()
+    scale = float(f.loc[join0] / p.loc[join0])
+    p_aln = p * scale
+    out.loc[p_aln.index] = p_aln
+
+    # Before join: filler
+    before = f.loc[f.index < join0]
+    out.loc[before.index] = before
+
+    # After last primary: continue with filler growth from last spliced level
+    last = p_aln.index.max()
+    if last in f.index:
+        after = f.loc[f.index > last]
+        if not after.empty:
+            out.loc[after.index] = float(out.loc[last]) * (after / float(f.loc[last]))
+    out.name = p.name
+    return out.sort_index()
 
 
 def load_boc_series(series_name: str) -> pd.Series:
@@ -393,8 +693,49 @@ def build_panel() -> pd.DataFrame:
     except Exception as exc:  # noqa: BLE001
         print(f"  WARN: RPPI failed: {exc}")
         rppi = pd.Series(dtype=float, name="rppi_house_resale")
-    print("Downloading TSX...")
+    print("Downloading TSX Composite...")
     tsx = to_month_end(load_tsx())
+    print("Downloading S&P/TSX 60...")
+    try:
+        tsx60 = to_month_end(load_tsx60())
+    except Exception as exc:  # noqa: BLE001
+        print(f"  WARN: TSX60 failed: {exc}")
+        tsx60 = pd.Series(dtype=float, name="tsx60")
+    print("Downloading TSX dividend yield...")
+    try:
+        tsx_yield = to_month_end(load_tsx_dividend_yield())
+    except Exception as exc:  # noqa: BLE001
+        print(f"  WARN: TSX yield failed: {exc}")
+        tsx_yield = pd.Series(dtype=float, name="tsx_div_yield")
+    print("Downloading S&P 500 price (USD)...")
+    try:
+        sp500 = to_month_end(load_sp500())
+    except Exception as exc:  # noqa: BLE001
+        print(f"  WARN: S&P500 price failed: {exc}")
+        sp500 = pd.Series(dtype=float, name="sp500")
+    print("Downloading S&P 500 total return (USD)...")
+    try:
+        sp500_tr_usd = to_month_end(load_sp500_tr_usd())
+    except Exception as exc:  # noqa: BLE001
+        print(f"  WARN: S&P500 TR failed: {exc}")
+        sp500_tr_usd = pd.Series(dtype=float, name="sp500_tr_usd")
+    print("Downloading CAD per USD (EXCAUS)...")
+    try:
+        cadusd = to_month_end(load_cad_per_usd())
+    except Exception as exc:  # noqa: BLE001
+        print(f"  WARN: EXCAUS failed: {exc}")
+        cadusd = pd.Series(dtype=float, name="cad_per_usd")
+    print("Downloading Yahoo ETF adj closes (TR splice)...")
+    try:
+        xiu_adj = load_yahoo_monthly_adj("XIU.TO")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  WARN: XIU.TO failed: {exc}")
+        xiu_adj = pd.Series(dtype=float, name="XIU_TO")
+    try:
+        xic_adj = load_yahoo_monthly_adj("XIC.TO")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  WARN: XIC.TO failed: {exc}")
+        xic_adj = pd.Series(dtype=float, name="XIC_TO")
 
     boc = {
         "mortgage_5y": "V80691335",
@@ -420,6 +761,13 @@ def build_panel() -> pd.DataFrame:
             "crea_mls_hpi": crea,
             "rppi_house_resale": rppi,
             "tsx": tsx,
+            "tsx60": tsx60,
+            "tsx_div_yield": tsx_yield,
+            "sp500": sp500,
+            "sp500_tr_usd": sp500_tr_usd,
+            "cad_per_usd": cadusd,
+            "xiu_adj": xiu_adj,
+            "xic_adj": xic_adj,
             **rates,
         }
     ).sort_index()
@@ -430,9 +778,82 @@ def build_panel() -> pd.DataFrame:
         "house_bis_real_pub",
         "rppi_house_resale",
         "crea_mls_hpi",
+        "tsx_div_yield",
     ):
         if col in df.columns:
             df[col] = df[col].ffill()
+
+    # --- Total-return equity legs (primary) ---
+    # S&P500 TR in CAD: USD total-return wealth × CAD per USD
+    if "sp500_tr_usd" in df.columns and "cad_per_usd" in df.columns:
+        df["sp500_tr_cad"] = df["sp500_tr_usd"] * df["cad_per_usd"]
+    # Price-only CAD (kept for comparison)
+    if "sp500" in df.columns and "cad_per_usd" in df.columns:
+        df["sp500_cad"] = df["sp500"] * df["cad_per_usd"]
+
+    # TSX Composite TR: price + StatCan yield; after yield ends splice XIC.TO adj
+    if "tsx" in df.columns and "tsx_div_yield" in df.columns and df["tsx_div_yield"].notna().any():
+        tsx_tr_yield = total_return_from_price_and_yield(
+            df["tsx"], df["tsx_div_yield"], name="tsx_tr"
+        )
+        r_tsx_tr = tsx_tr_yield.pct_change(fill_method=None)
+        if "xic_adj" in df.columns and df["xic_adj"].notna().any():
+            r_xic = df["xic_adj"].pct_change(fill_method=None)
+            yield_end = df["tsx_div_yield"].dropna().index.max()
+            r_tsx = r_tsx_tr.copy()
+            after_idx = r_tsx.index[r_tsx.index > yield_end]
+            r_tsx.loc[after_idx] = r_xic.reindex(after_idx)
+            df["tsx_tr"] = returns_to_index(r_tsx, name="tsx_tr")
+        else:
+            df["tsx_tr"] = tsx_tr_yield
+    elif "tsx" in df.columns:
+        df["tsx_tr"] = df["tsx"]
+
+    # TSX60 TR: apply Composite yield to TSX60 price; splice XIU.TO adj when available
+    if "tsx60" in df.columns and df["tsx60"].notna().any():
+        if "tsx_div_yield" in df.columns and df["tsx_div_yield"].notna().any():
+            tsx60_tr_core = total_return_from_price_and_yield(
+                df["tsx60"], df["tsx_div_yield"], name="tsx60_tr"
+            )
+            r60 = tsx60_tr_core.pct_change(fill_method=None)
+        else:
+            r60 = df["tsx60"].pct_change(fill_method=None)
+        if "xiu_adj" in df.columns and df["xiu_adj"].notna().any():
+            r_xiu = df["xiu_adj"].pct_change(fill_method=None)
+            # Prefer XIU adj over the ETF sample (true TR); yield construction before
+            start_xiu = df["xiu_adj"].dropna().index.min()
+            if start_xiu is not None:
+                idx = r60.index[r60.index >= start_xiu]
+                r60.loc[idx] = r_xiu.reindex(idx)
+        df["tsx60_tr"] = returns_to_index(r60, name="tsx60_tr")
+    else:
+        df["tsx60_tr"] = pd.Series(dtype=float, name="tsx60_tr")
+
+    # Splice TSX60 TR with Composite TR outside TSX60 window
+    if df["tsx60_tr"].notna().any() and df["tsx_tr"].notna().any():
+        df["tsx60_tr_spliced"] = splice_with_filler(
+            df["tsx60_tr"].dropna(), df["tsx_tr"].dropna()
+        )
+    elif df["tsx_tr"].notna().any():
+        df["tsx60_tr_spliced"] = df["tsx_tr"]
+
+    # Price-only spliced TSX60 (comparison)
+    if "tsx60" in df.columns and df["tsx60"].notna().any() and "tsx" in df.columns:
+        df["tsx60_spliced"] = splice_with_filler(df["tsx60"].dropna(), df["tsx"].dropna())
+    elif "tsx" in df.columns:
+        df["tsx60_spliced"] = df["tsx"]
+
+    # Primary combined equity: 50/50 S&P500 TR (CAD) + TSX60 TR
+    if "sp500_tr_cad" in df.columns and "tsx60_tr_spliced" in df.columns:
+        df["equity_comb"] = equal_weight_combined_index(
+            df["sp500_tr_cad"], df["tsx60_tr_spliced"], weight_a=0.5
+        )
+        df["equity_comb"].name = "equity_comb"
+    # Price-only combined for comparison
+    if "sp500_cad" in df.columns and "tsx60_spliced" in df.columns:
+        df["equity_comb_price"] = equal_weight_combined_index(
+            df["sp500_cad"], df["tsx60_spliced"], weight_a=0.5
+        )
 
     # Real (CPI-deflated) levels for each housing index
     housing_nominal = [
@@ -451,16 +872,46 @@ def build_panel() -> pd.DataFrame:
     for col in housing_nominal:
         df[f"{col}_real"] = df[col] / df["cpi"]
 
+    equity_nominal = [
+        c
+        for c in (
+            "tsx",
+            "tsx_tr",
+            "tsx60",
+            "tsx60_tr",
+            "tsx60_tr_spliced",
+            "tsx60_spliced",
+            "sp500_cad",
+            "sp500_tr_cad",
+            "equity_comb",
+            "equity_comb_price",
+        )
+        if c in df.columns and df[c].notna().any()
+    ]
+    for col in equity_nominal:
+        df[f"{col}_real"] = df[col] / df["cpi"]
+
     df["tsx_real"] = df["tsx"] / df["cpi"]
     # Alias used elsewhere
     if "house_bis_real" in df.columns:
         pass
     df["house_real"] = df.get("house_bis_real", df["house_bis"] / df["cpi"])
 
-    base = df[["house_real", "tsx_real", "cpi"]].dropna().index.min()
+    # Preferred equity for estimation: 50/50 total-return combined
+    if "equity_comb_real" in df.columns and df["equity_comb_real"].notna().any():
+        df["equity_real"] = df["equity_comb_real"]
+    elif "tsx_tr_real" in df.columns:
+        df["equity_real"] = df["tsx_tr_real"]
+    else:
+        df["equity_real"] = df["tsx_real"]
+
+    base = df[["house_real", "equity_real", "cpi"]].dropna().index.min()
     if pd.notna(base):
         rebase_cols = [f"{c}_real" for c in housing_nominal] + [
+            f"{c}_real" for c in equity_nominal
+        ] + [
             "tsx_real",
+            "equity_real",
             "house_real",
             "house_bis_real_pub",
         ]
@@ -487,7 +938,24 @@ def build_panel() -> pd.DataFrame:
         df["r_rppi_m"] = (1.0 + df["rppi_house_resale"].pct_change(fill_method=None)) / (
             1.0 + df["pi_m"]
         ) - 1.0
-    df["r_equity_m"] = (1.0 + df["tsx"].pct_change(fill_method=None)) / (1.0 + df["pi_m"]) - 1.0
+
+    # Equity monthly real returns (primary = combined TR; keep legs for comparison)
+    equity_ret_src = {
+        "r_equity_m": "equity_comb" if "equity_comb" in df.columns else "tsx_tr",
+        "r_tsx_m": "tsx",
+        "r_tsx_tr_m": "tsx_tr",
+        "r_tsx60_m": "tsx60",
+        "r_tsx60_tr_m": "tsx60_tr",
+        "r_sp500_cad_m": "sp500_cad",
+        "r_sp500_tr_cad_m": "sp500_tr_cad",
+        "r_equity_comb_m": "equity_comb",
+        "r_equity_comb_price_m": "equity_comb_price",
+    }
+    for rcol, src in equity_ret_src.items():
+        if src in df.columns and df[src].notna().any():
+            df[rcol] = (1.0 + df[src].pct_change(fill_method=None)) / (
+                1.0 + df["pi_m"]
+            ) - 1.0
 
     for col in rates:
         if col not in df.columns:
@@ -504,6 +972,14 @@ def build_panel() -> pd.DataFrame:
         ("cum_mls_real", "r_mls_m"),
         ("cum_rppi_real", "r_rppi_m"),
         ("cum_equity_real", "r_equity_m"),
+        ("cum_tsx_real", "r_tsx_m"),
+        ("cum_tsx_tr_real", "r_tsx_tr_m"),
+        ("cum_tsx60_real", "r_tsx60_m"),
+        ("cum_tsx60_tr_real", "r_tsx60_tr_m"),
+        ("cum_sp500_cad_real", "r_sp500_cad_m"),
+        ("cum_sp500_tr_cad_real", "r_sp500_tr_cad_m"),
+        ("cum_equity_comb_real", "r_equity_comb_m"),
+        ("cum_equity_comb_price_real", "r_equity_comb_price_m"),
         ("cum_mortgage_real", "mortgage_5y_real_m"),
         ("cum_gic_real", "gic_1y_real_m"),
         ("cum_bond5_real", "bond_5y_real_m"),
@@ -522,8 +998,24 @@ def build_panel() -> pd.DataFrame:
 
 
 def annualize_returns(df: pd.DataFrame) -> pd.DataFrame:
-    """Annual real returns for equity and housing (calendar-year compound)."""
-    cols = [c for c in ("r_equity_m", "r_house_m", "r_nhpi_m") if c in df.columns]
+    """Annual real returns for equity legs and housing (calendar-year compound)."""
+    cols = [
+        c
+        for c in (
+            "r_equity_m",
+            "r_equity_comb_m",
+            "r_equity_comb_price_m",
+            "r_tsx_m",
+            "r_tsx_tr_m",
+            "r_tsx60_m",
+            "r_tsx60_tr_m",
+            "r_sp500_cad_m",
+            "r_sp500_tr_cad_m",
+            "r_house_m",
+            "r_nhpi_m",
+        )
+        if c in df.columns
+    ]
     ann = df[cols].copy()
     g = ann.groupby(ann.index.year)
 
@@ -539,63 +1031,33 @@ def annualize_returns(df: pd.DataFrame) -> pd.DataFrame:
     out = out.rename(
         columns={
             "r_equity_m": "r_equity",
+            "r_equity_comb_m": "r_equity_comb",
+            "r_equity_comb_price_m": "r_equity_comb_price",
+            "r_tsx_m": "r_tsx",
+            "r_tsx_tr_m": "r_tsx_tr",
+            "r_tsx60_m": "r_tsx60",
+            "r_tsx60_tr_m": "r_tsx60_tr",
+            "r_sp500_cad_m": "r_sp500_cad",
+            "r_sp500_tr_cad_m": "r_sp500_tr_cad",
             "r_house_m": "r_house",
             "r_nhpi_m": "r_nhpi",
         }
     )
     out.index = pd.to_datetime(out.index.astype(str) + "-12-31")
+    # Primary equity for bivariate AR(1) is the combined index when available
+    if "r_equity" not in out.columns and "r_tsx" in out.columns:
+        out["r_equity"] = out["r_tsx"]
     return out.dropna(subset=["r_equity", "r_house"])
-
-
-def estimate_diag_ar1(
-    r_f: np.ndarray,
-    r_h: np.ndarray,
-) -> Dict[str, float]:
-    """
-    Estimate
-        r_{t+1} - mu = Phi (r_t - mu) + eps_{t+1},
-    with Phi = diag(rho_f, rho_h) and Corr(eps) free.
-
-    OLS equation-by-equation on demeaned series.
-    """
-    rf = np.asarray(r_f, dtype=float)
-    rh = np.asarray(r_h, dtype=float)
-    ok = np.isfinite(rf) & np.isfinite(rh)
-    rf, rh = rf[ok], rh[ok]
-    mu_f, mu_h = float(rf.mean()), float(rh.mean())
-    xf, xh = rf - mu_f, rh - mu_h
-    # y_t = x_{t+1}, x_t = lag
-    yf, yh = xf[1:], xh[1:]
-    xf_l, xh_l = xf[:-1], xh[:-1]
-    rho_f = float(np.dot(xf_l, yf) / np.dot(xf_l, xf_l))
-    rho_h = float(np.dot(xh_l, yh) / np.dot(xh_l, xh_l))
-    eps_f = yf - rho_f * xf_l
-    eps_h = yh - rho_h * xh_l
-    sig_f = float(eps_f.std(ddof=1))
-    sig_h = float(eps_h.std(ddof=1))
-    corr = float(np.corrcoef(eps_f, eps_h)[0, 1])
-    # Unconditional corr of returns (for comparison)
-    unc_corr = float(np.corrcoef(rf, rh)[0, 1])
-    return {
-        "mu_f": mu_f,
-        "mu_h": mu_h,
-        "rho_f": rho_f,
-        "rho_h": rho_h,
-        "sigma_f": sig_f,
-        "sigma_h": sig_h,
-        "corr_innov": corr,
-        "corr_unconditional": unc_corr,
-        "n_obs": float(len(yf)),
-        "mean_Rf_gross": 1.0 + mu_f,
-        "mean_Rh_gross": 1.0 + mu_h,
-    }
 
 
 def make_plots(df: pd.DataFrame, ann: pd.DataFrame, est: Dict[str, float]) -> None:
     # 1) Cumulative real indices
     fig, ax = plt.subplots(figsize=(11, 5.5))
     for col, label in [
-        ("cum_equity_real", "Equity TSX real (price only)"),
+        ("cum_equity_comb_real", "Equity 50/50 TR S&P500(CAD)+TSX60 real"),
+        ("cum_sp500_tr_cad_real", "S&P500 CAD total return real"),
+        ("cum_tsx_tr_real", "TSX Composite total return real"),
+        ("cum_equity_comb_price_real", "50/50 price-only (comparison)"),
         ("cum_house_real", "Housing BIS real (existing)"),
         ("cum_nhpi_real", "Housing NHPI real (new homes)"),
         ("cum_bond5_real", "5y GoC yield compounded real"),
@@ -617,7 +1079,9 @@ def make_plots(df: pd.DataFrame, ann: pd.DataFrame, est: Dict[str, float]) -> No
     # 2) Monthly real growth rates (smoothed 12m for readability)
     fig, axes = plt.subplots(2, 1, figsize=(11, 7), sharex=True)
     for col, label in [
-        ("r_equity_m", "Equity real monthly"),
+        ("r_equity_comb_m", "50/50 TR combined real monthly"),
+        ("r_sp500_tr_cad_m", "S&P500 CAD TR real monthly"),
+        ("r_tsx_tr_m", "TSX Composite TR real monthly"),
         ("r_house_m", "Housing BIS real monthly"),
         ("r_nhpi_m", "NHPI real monthly"),
     ]:
@@ -674,13 +1138,33 @@ def main() -> None:
 
     ann = annualize_returns(df)
     ann.to_csv(OUT / "macro_returns_annual.csv")
-    est = estimate_diag_ar1(ann["r_equity"].to_numpy(), ann["r_house"].to_numpy())
+    idx = annual_real_indices(df)
+    idx.to_csv(OUT / "annual_real_price_indices.csv")
+    est = estimate_bivar_ar1_from_indices(idx["P_equity"], idx["P_house"])
+    est_simple = estimate_diag_ar1_simple(
+        ann["r_equity"].to_numpy(), ann["r_house"].to_numpy()
+    )
     pd.Series(est).to_csv(OUT / "bivar_ar1_equity_housing.csv", header=["value"])
-    print("Diagonal AR(1) estimates (annual real returns, equity vs BIS housing):")
+    out_json = save_return_estimates(
+        est,
+        OUT / "bivar_ar1_canada_return_params.json",
+        comparison=est_simple,
+        meta={
+            "equity": "equity_comb_real year-end (50/50 S&P500 CAD TR + TSX60 TR)",
+            "housing": "house_real year-end (BIS/CPI)",
+            "frequency": "annual",
+            "returns": "Δlog real total-return index; AR(1) on demeaned log growth",
+            "Rf_bar_mapping": "mean(exp(Δlog P))",
+            "dividends": "S&P500: Shiller D/12 (+ Yahoo ^SP500TR splice); Canada: StatCan yield (+ XIU/XIC adj splice)",
+        },
+    )
+    print(f"Wrote {out_json}")
+    print("Diagonal AR(1) on demeaned annual Δlog real indices (primary equity = combined):")
     for k, v in est.items():
         print(f"  {k}: {v:.6g}" if isinstance(v, float) else f"  {k}: {v}")
 
-    make_plots(df, ann, est)
+    # Scatter still uses simple annual returns for readability
+    make_plots(df, ann, est_simple)
     plot_housing_index_comparison(df)
     print(f"Figures in {OUT}")
 
@@ -692,6 +1176,10 @@ def main() -> None:
         "crea_mls_hpi",
         "rppi_house_resale",
         "tsx",
+        "tsx60",
+        "sp500",
+        "sp500_cad",
+        "equity_comb",
         "mortgage_5y",
         "gic_1y",
         "bond_5y",

@@ -12,15 +12,20 @@ from .ar1_returns import RouwenhorstAR1, _stationary_dist
 
 @dataclass
 class CanadaReturnParams:
-    """Placeholder calibration labels for Canadian markets (not yet estimated)."""
+    """
+    Canadian equity/housing return process parameters.
 
-    # Gross return means (annual stylized)
+    Defaults are stylized placeholders. Prefer loading estimates via
+    ``returns_estimate.load_canada_return_params`` (see notebook 04).
+    """
+
+    # Gross return means (annual)
     Rf_bar: float = 1.06
     Rh_bar: float = 1.04
-    # Persistence of log demeaned returns
+    # Persistence of demeaned returns (docs: log; estimates currently simple)
     rho_f: float = 0.55
     rho_h: float = 0.70
-    # Innovation vols of log returns
+    # Innovation vols (docs: log; estimates currently simple)
     sigma_f: float = 0.16
     sigma_h: float = 0.10
     # Correlation of innovations
