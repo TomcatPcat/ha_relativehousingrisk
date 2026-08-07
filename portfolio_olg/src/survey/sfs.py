@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, Optional, Sequence, Union
+from typing import Dict, Iterable, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
 
 from .paths import load_local_paths, require_file
-from .weighted import wmean, wshare
+from .weighted import wmean, wquantile, wshare
 
 # StatCan EFAM PUMF → analysis names
 _RENAME = {
@@ -84,16 +84,42 @@ _ZERO_FILL = (
     "debt_oth_val",
     "debt_vehicles_val",
     "debt_tot_val",
-    "inc_gross",
-    "inc_net",
-    "inc_transfers",
+)
+
+# Income stays as NaN when residual / not stated (do not zero-fill).
+_INCOME_COLS = ("inc_gross", "inc_net", "inc_transfers")
+
+# StatCan PUMF residual / not-stated codes for dollar amounts (8- and 9-digit).
+_RESIDUAL_DOLLAR_CODES = frozenset(
+    {
+        99999996,
+        99999997,
+        99999998,
+        99999999,
+        999999996,
+        999999997,
+        999999998,
+        999999999,
+    }
 )
 
 SFS_YEARS: tuple[int, ...] = (1999, 2005, 2012, 2016, 2019, 2023)
 
 
+def _scrub_residual_codes(s: pd.Series) -> pd.Series:
+    """
+    Convert StatCan residual dollar codes to NaN.
+
+    Codes such as ``99999999`` (not stated) must not enter means as income.
+    Also flags any absolute value ``>= 99_999_996`` as residual for safety.
+    """
+    x = pd.to_numeric(s, errors="coerce")
+    residual = x.isin(_RESIDUAL_DOLLAR_CODES) | (x.abs() >= 99_999_996)
+    return x.mask(residual)
+
+
 def _na2zero(s: pd.Series) -> pd.Series:
-    return pd.to_numeric(s, errors="coerce").fillna(0.0)
+    return _scrub_residual_codes(s).fillna(0.0)
 
 
 def _col(df: pd.DataFrame, name: str) -> pd.Series:
@@ -213,6 +239,13 @@ def load_sfs(
         else:
             out[c] = 0.0
 
+    # Income: scrub residual codes → NaN (exclude from weighted moments)
+    for c in _INCOME_COLS:
+        if c in out.columns:
+            out[c] = _scrub_residual_codes(out[c])
+        else:
+            out[c] = np.nan
+
     out["weight"] = pd.to_numeric(out["weight"], errors="coerce")
     out["year"] = pd.to_numeric(out["year"], errors="coerce").astype("Int64")
     out = out[out["weight"].notna() & (out["weight"] > 0)].copy()
@@ -302,3 +335,72 @@ def sfs_aggregate_moments(
         "mean_inc_net",
     ]
     return pd.DataFrame(rows)[cols]
+
+
+# Default household-level variables for distribution charts
+SFS_DIST_VARS: Dict[str, str] = {
+    "nw": "Net worth (ex-auto)",
+    "inc_net": "Net income",
+    "housing_net": "Net housing wealth",
+    "financial_net": "Net financial wealth",
+    "housing_share_hh": "Housing portfolio share (H_net / NW)",
+}
+
+DEFAULT_QUANTILES: Tuple[float, ...] = (0.10, 0.25, 0.50, 0.75, 0.90)
+
+
+def sfs_distribution_moments(
+    df: pd.DataFrame,
+    *,
+    by: str = "year",
+    variables: Optional[Mapping[str, str]] = None,
+    quantiles: Sequence[float] = DEFAULT_QUANTILES,
+    nw_share_eps: float = 1.0,
+) -> pd.DataFrame:
+    """
+    Weighted mean and quantiles of household-level SFS variables by group.
+
+    Adds ``housing_share_hh = housing_net / nw`` for rows with ``|nw| >= nw_share_eps``.
+
+    Returns a long DataFrame with columns ``by``, ``variable``, ``label``,
+    ``stat`` (``mean`` / ``p10`` / …), ``value``, and ``n``.
+    """
+    variables = dict(variables) if variables is not None else dict(SFS_DIST_VARS)
+    work = df.copy()
+    if "housing_share_hh" in variables:
+        nw = work["nw"].to_numpy(dtype=float)
+        hn = work["housing_net"].to_numpy(dtype=float)
+        share = np.full(nw.shape, np.nan, dtype=float)
+        ok = np.isfinite(nw) & np.isfinite(hn) & (np.abs(nw) >= float(nw_share_eps))
+        share[ok] = hn[ok] / nw[ok]
+        work["housing_share_hh"] = share
+
+    missing = [c for c in variables if c not in work.columns]
+    if missing:
+        raise KeyError(f"sfs_distribution_moments missing columns: {missing}")
+    if "weight" not in work.columns:
+        raise KeyError("sfs_distribution_moments missing weight")
+    if by not in work.columns:
+        raise KeyError(f"sfs_distribution_moments missing group column {by}")
+
+    q_labels = {p: f"p{int(round(100 * p))}" for p in quantiles}
+    rows: list[dict] = []
+    for key, g in work.groupby(by, sort=True, dropna=False):
+        w = g["weight"].to_numpy(dtype=float)
+        for col, label in variables.items():
+            x = g[col].to_numpy(dtype=float)
+            ok = np.isfinite(x) & np.isfinite(w) & (w > 0)
+            n_ok = int(ok.sum())
+            base = {by: key, "variable": col, "label": label, "n": n_ok}
+            if n_ok == 0:
+                rows.append({**base, "stat": "mean", "value": float("nan")})
+                for p, lab in q_labels.items():
+                    rows.append({**base, "stat": lab, "value": float("nan")})
+                continue
+            rows.append({**base, "stat": "mean", "value": wmean(x[ok], w[ok])})
+            qs = wquantile(x[ok], w[ok], list(quantiles))
+            qs = np.atleast_1d(qs)
+            for p, lab, val in zip(quantiles, q_labels.values(), qs):
+                rows.append({**base, "stat": lab, "value": float(val)})
+
+    return pd.DataFrame(rows)
