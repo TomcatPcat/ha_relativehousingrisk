@@ -1,10 +1,10 @@
-# Maryline Ah-Kiow | Interview preparation
+# Your interview preparation
 
 **Bilingual Customer Care Associate, Sharing Economy · Definity**
 
 Prepared 29 October 2026. Use the answers as speaking guides, not as a script to memorize word for word.
 
-This version follows the LinkedIn posting Maryline identified. An earlier draft followed a different copy of a similar advertisement. That copy named Uber and listed hours until 8:00 p.m., with occasional weekends. This posting does not name a platform, and it sets the shift window at 8:00 a.m. to 4:30 p.m. Eastern.
+This version follows the LinkedIn posting you identified. An earlier draft followed a different copy of a similar advertisement. That copy named Uber and listed hours until 8:00 p.m., with occasional weekends. This posting does not name a platform, and it sets the shift window at 8:00 a.m. to 4:30 p.m. Eastern.
 
 **Best positioning.** Experienced bilingual contact-centre professional who is calm, accurate, and steady with people at a difficult moment.
 
@@ -20,13 +20,13 @@ Definity · Ontario, Canada · full time · entry level
 
 Source: [LinkedIn posting 4474190393](https://ca.linkedin.com/jobs/view/bilingual-customer-care-associate-sharing-economy-at-definity-4474190393), checked 29 October 2026. LinkedIn listed it as posted about three weeks earlier.
 
-The posting uses “sharing economy” and does not name Uber or another platform. Maryline should say “sharing-economy customers” unless the interviewer names one. If they ask what the term means, a safe line is: “I understand it as the first step of a claim for customers who use sharing platforms, and I would learn exactly which customers this team serves during training.”
+The posting uses “sharing economy” and does not name Uber or another platform. Say “sharing-economy customers” unless the interviewer names one. If they ask what the term means, a safe line is: “I understand it as the first step of a claim for customers who use sharing platforms, and I would learn exactly which customers this team serves during training.”
 
-LinkedIn marks the job entry level. That means new to insurance claims. The posting says insurance experience is not required. Maryline should speak as an experienced customer-service professional who is new to claims, not as someone new to work.
+LinkedIn marks the job entry level. That means new to insurance claims. The posting says insurance experience is not required. Speak as an experienced customer-service professional who is new to claims, not as someone new to work.
 
 ### What the associate does
 
-She uses InsurCloud to guide customers through the first steps of a claim. No prior insurance experience is required. Definity describes structured daytime hours, training on systems such as Guidewire, and a path toward a longer career in insurance.
+You use InsurCloud to guide customers through the first steps of a claim. No prior insurance experience is required. Definity describes structured daytime hours, training on systems such as Guidewire, and a path toward a longer career in insurance.
 
 - Answer incoming calls, and call customers back, in a courteous and compassionate way.
 - Listen for what matters to the customer in this claim, and establish trust.
@@ -38,16 +38,16 @@ She uses InsurCloud to guide customers through the first steps of a claim. No pr
 ### What they ask for
 
 - Fluent English and French. Bilingualism is required.
-- Secondary school diploma at minimum. Maryline’s Cambridge School Certificate is the equivalent of an Ontario Grade 12 diploma.
+- Secondary school diploma at minimum. Your Cambridge School Certificate is the equivalent of an Ontario Grade 12 diploma.
 - Successful customer conversations: empathy, calm, telephone etiquette, and active listening.
 - Clear communication and comfort with computer applications.
 - Customer service or inbound call-centre experience is an asset. Insurance experience is not required.
-- CDS or Guidewire experience is an asset. Do not claim either. Maryline has not used them. The posting also says Definity provides training on systems such as Guidewire.
+- CDS or Guidewire experience is an asset. Do not claim either. You have not used them. The posting also says Definity provides training on systems such as Guidewire.
 - Shifts are scheduled between 8:00 a.m. and 4:30 p.m. Eastern. The posting calls these structured daytime hours. It does not mention evenings or weekends.
 - Hybrid work is listed for most roles. The team description says people work from the office and virtually depending on the work. The posting gives Ontario as the location and does not name the office.
 - Posted salary range: $49,300 to $82,100. The posting says actual pay depends on location, skills, education, experience, working conditions, and the local labour market.
 - Background checks, including a criminal record check and leadership references.
-- Benefits listed on the posting, for her information rather than as an interview opening: a share-ownership program, a discretionary incentive program, pension and savings programs with company-matched RRSP contributions, paid volunteer days and donation matching, tuition assistance and paid study time, wellness and recognition programs, and discounts. No amounts are given for those items.
+- Benefits listed on the posting, for your information rather than as an interview opening: a share-ownership program, a discretionary incentive program, pension and savings programs with company-matched RRSP contributions, paid volunteer days and donation matching, tuition assistance and paid study time, wellness and recognition programs, and discounts. No amounts are given for those items.
 
 ### Company facts worth knowing
 
@@ -56,17 +56,17 @@ From the LinkedIn posting and [definityfinancial.com](https://www.definityfinanc
 - The posting describes Definity as the parent of Economical Insurance, Sonnet Insurance, Family Insurance Solutions, and Petline Insurance. It wants to be one of Canada’s leading property and casualty insurers.
 - Definity’s own site says the company protects homes, vehicles, businesses, farms, and pets, and that it was formed in 2021 when Economical demutualized. Economical wrote its first policy in 1871.
 - The posting says Definity was named a Great Place to Work in Canada for women, for youth, and for inclusion. One mention is enough if culture comes up. Do not recite the slogan list.
-- The line she can use naturally is that Definity wants to make insurance better, and that this job is the first step of a claim for a sharing-economy customer.
+- The line you can use naturally is that Definity wants to make insurance better, and that this job is the first step of a claim for a sharing-economy customer.
 
-### How her experience maps to the role
+### How your experience maps to the role
 
-| What they want | Maryline’s evidence | Line to repeat |
+| What they want | Your evidence | Line to repeat |
 | --- | --- | --- |
 | Calm, empathic phone service | More than ten years of bilingual customer service, including upset callers | I stay calm, I let the person finish, and I keep them informed. |
 | Inbound contact centre | Current PSPC National Service Call Centre | I already work in a busy inbound centre. |
-| Daytime schedule | She can keep a set daily schedule. Her current role is rotating, which shows she attends the hours she is given. | I am comfortable with shifts between 8:00 a.m. and 4:30 p.m. |
-| Training on new systems | She learned SAP, databases, and federal procedures on the job. | I have not used InsurCloud or Guidewire. I am ready for the training. |
-| Gather facts and open a file | She collects the location and nature of a trouble call, documents it, and routes it | I ask for the facts, I write them down accurately, and I send them to the right place. |
+| Daytime schedule | You can keep a set daily schedule. Your current role is rotating, which shows you attend the hours you are given. | I am comfortable with shifts between 8:00 a.m. and 4:30 p.m. |
+| Training on new systems | You learned SAP, databases, and federal procedures on the job. | I have not used InsurCloud or Guidewire. I am ready for the training. |
+| Gather facts and open a file | You collect the location and nature of a trouble call, document it, and route it | I ask for the facts, I write them down accurately, and I send them to the right place. |
 | Ownership and follow-up | Larson Juhl follow-up on pending inquiries; Newell coordination with other teams | I take the issue and I follow it through. |
 | Plain language | Explains product, price, status, and solutions in English and French | I make the next step easy to understand. |
 | Systems and accuracy | SAP, databases, scripts, and federal documentation | I learn the system and I check the entry before I leave it. |
@@ -89,7 +89,7 @@ Je suis une professionnelle bilingue du service à la clientèle, avec plus de d
 
 ### Why do you want to work at Definity?
 
-**What they are testing.** Motivation, and whether she knows what the company does.
+**What they are testing.** Motivation, and whether you know what the company does.
 
 I’m interested in Definity because the work is helping people when something has already gone wrong. I like roles where I can reduce confusion and help someone take the next step with confidence. This sharing-economy role is that first step. It uses the bilingual customer service I already do, and the posting says insurance experience is not required because Definity trains people on the claims systems. Definity also comes from Economical, which has insured Canadians for a very long time. I would like to learn this work properly and build a longer career in insurance.
 
@@ -107,7 +107,7 @@ I bring many years of bilingual customer service in high-volume environments. I 
 
 ### You do not have insurance experience. How would you handle the learning curve?
 
-**What they are testing.** Learning agility, and humility without underselling herself.
+**What they are testing.** Learning agility, and humility without underselling yourself.
 
 I would use the training the posting describes, including InsurCloud and systems such as Guidewire. I would take organized notes and practise the calls that happen most often. If I did not know an answer, I would say so, check the approved resource, and then come back with the right information. I would not guess about coverage. I learn by asking questions and by applying the answer to the next real call.
 
@@ -181,7 +181,7 @@ I am grateful for this role. It has taught me how to handle urgent requests, how
 
 ## Behavioural stories
 
-Keep each story to about 90 seconds: situation, task, action, result. Do not invent a number or a result. Add one real detail only if Maryline remembers it clearly.
+Keep each story to about 90 seconds: situation, task, action, result. Do not invent a number or a result. Add one real detail only if you remember it clearly.
 
 ### A difficult customer
 
@@ -243,7 +243,7 @@ Earlier in my career I learned that acting before I had confirmed every detail c
 
 ## Claims language
 
-Maryline does not need to sound like an adjuster. She needs plain, accurate words, and a clear limit on what this role decides.
+You do not need to sound like an adjuster. You need plain, accurate words, and a clear limit on what this role decides.
 
 **What is a first notice of loss?**
 
@@ -267,7 +267,7 @@ I would not guess, especially about coverage or money. I would tell the customer
 
 **What does InsurCloud refer to?**
 
-It is the claims system named in the posting, where the associate enters the claim and sets up the file. Maryline has not used it. The honest line is: I have not used InsurCloud yet. I have learned other systems, including SAP, and I would learn this one in training before I relied on it with a customer.
+It is the claims system named in the posting, where the associate enters the claim and sets up the file. You have not used it. The honest line is: I have not used InsurCloud yet. I have learned other systems, including SAP, and I would learn this one in training before I relied on it with a customer.
 
 ## Role-play lines
 
@@ -394,7 +394,7 @@ J’aimerais savoir à quoi ressemble une bonne performance pendant les trois pr
 
 **Conclure l’appel.** Avant de terminer, je vais résumer ce que nous avons fait et la prochaine étape. Est-ce qu’il y a autre chose que je peux clarifier pour vous?
 
-## Questions Maryline can ask
+## Questions you can ask
 
 - What does strong performance look like in the first three months?
 - What does a typical first-notice call include, and when does this role hand the file to the next team?
@@ -463,7 +463,7 @@ There was no Definity guide in the repository to compare against. The comparison
 - The map from posting requirements to evidence to a repeatable line.
 - The core answers: why this employer, why this role, why you, learning curve, excellent service, upset client, volume, plain language, several systems, confidentiality, feedback, changing priorities, schedule, salary, and why leave.
 - The STAR set: difficult customer, other teams, accuracy, urgency, a new system, and a low-risk mistake. The urgency story is the one to lean on, because dispatching a trouble call is the closest work to opening a claim.
-- The longer French section: strengths, an improvement area, priorities, collaboration, accuracy, a problem that cannot be fixed immediately, trust, the limit of the role, how she learns, feedback, an error in a file, the next few years, questions to ask, and a short language-switch drill.
+- The longer French section: strengths, an improvement area, priorities, collaboration, accuracy, a problem that cannot be fixed immediately, trust, the limit of the role, how you learn, feedback, an error in a file, the next few years, questions to ask, and a short language-switch drill.
 - Questions for the interviewer, questions to reframe, a closing statement, a day-of checklist, and a one-page review.
 - The service formula: listen, clarify, verify, explain, own, document, follow up.
 
@@ -473,15 +473,15 @@ Copying these into a Definity interview would pull the conversation toward the w
 
 - Investing explanations: TFSA and RRSP, stocks, ETFs, diversification, risk tolerance, and “What should I invest in?” Definity needs FNOL, coverage boundaries, and “I will not promise payment” instead.
 - The 100 percent remote pitch: private workspace, home internet, MacBook and equipment, and the work-from-anywhere allowance. This Definity posting says hybrid for most roles, with time in the office and time online depending on the work. It does not promise a fully remote job. Wealthsimple’s evening-and-weekend schedule also does not match. This posting’s window is 8:00 a.m. to 4:30 p.m. Eastern.
-- Slack, many browser tabs, and keyboard shortcuts as proof of technical fit. For Definity, the relevant systems point is SAP and databases now, then InsurCloud and Guidewire in Definity’s training. Do not claim she already uses CDS or Guidewire.
+- Slack, many browser tabs, and keyboard shortcuts as proof of technical fit. For Definity, the relevant systems point is SAP and databases now, then InsurCloud and Guidewire in Definity’s training. Do not claim you already use CDS or Guidewire.
 - Fintech curiosity as the reason for the move. The Definity reason is service at a stressful moment, plus careful records.
 - Role-plays about a slow institutional transfer or a promotion deadline. Replace them with a delayed claim update, an unknown coverage answer, a supplemental service, and two urgent calls.
-- Wealthsimple pay ($25.00 to $26.50 an hour) and benefits (health spending account, employer savings match, vacation, sick days). Use Definity’s range of $49,300 to $82,100. The LinkedIn posting lists share ownership, a discretionary incentive, pension and matched RRSP contributions, volunteer days, tuition assistance, and wellness programs. It gives no dollar amounts for those items, so she should not invent any, and she should not open the interview with benefits.
+- Wealthsimple pay ($25.00 to $26.50 an hour) and benefits (health spending account, employer savings match, vacation, sick days). Use Definity’s range of $49,300 to $82,100. The LinkedIn posting lists share ownership, a discretionary incentive, pension and matched RRSP contributions, volunteer days, tuition assistance, and wellness programs. It gives no dollar amounts for those items, so you should not invent any, and you should not open the interview with benefits.
 - “Why Wealthsimple makes finance easier for Canadians” as the motivation line.
 
 ## Sources
 
-- Maryline Ah-Kiow résumé, earlier version, updated here with the federal role.
+- Your résumé, earlier version, updated here with the federal role.
 - Wealthsimple interview guide, Bilingual Client Success Associate, used as the model for structure and for the 60-second shape.
 - Public Services and Procurement Canada, Bilingual Contact Centre Representative, National Service Call Centre, job 2276369, closed 12 February 2025: [gjobs.ca/jobs/2276369](https://www.gjobs.ca/jobs/2276369).
 - Definity, Bilingual Customer Care Associate, Sharing Economy, Ontario, LinkedIn job 4474190393: [ca.linkedin.com/jobs/view/bilingual-customer-care-associate-sharing-economy-at-definity-4474190393](https://ca.linkedin.com/jobs/view/bilingual-customer-care-associate-sharing-economy-at-definity-4474190393).
